@@ -1,0 +1,22 @@
+# Python
+backend/.env
+backend/__pycache__/
+backend/app/__pycache__/
+backend/*.egg-info
+backend/.venv/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/workspace.xml
+.idea/modules.xml
+.idea/jarRepositories.xml
+.idea/compiler.xml
+.idea/libraries/
+*.iml
+
+# OS
+.DS_Store
+.vscode/
