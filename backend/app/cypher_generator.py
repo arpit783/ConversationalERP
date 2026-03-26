@@ -15,9 +15,16 @@ FEW_SHOT_EXAMPLES = """
 
 Q: Which products are associated with the highest number of billing documents?
 A: {
-  "cypher": "MATCH (p:Product)<-[:REFERENCES_MATERIAL]-(bi:BillingItem)<-[:HAS_ITEM]-(bd:BillingDocument) RETURN p.product AS product, coalesce(p.description, p.product) AS description, count(DISTINCT bd) AS billingDocCount ORDER BY billingDocCount DESC LIMIT 20",
+  "cypher": "MATCH (p:Product)<-[:REFERENCES_MATERIAL]-(bi:BillingItem)<-[:HAS_ITEM]-(bd:BillingDocument) WITH p.product AS product, coalesce(p.description, p.product) AS description, count(DISTINCT bd) AS billingDocCount ORDER BY billingDocCount DESC WITH max(billingDocCount) AS maxCount MATCH (p2:Product)<-[:REFERENCES_MATERIAL]-(bi2:BillingItem)<-[:HAS_ITEM]-(bd2:BillingDocument) WITH p2.product AS product, coalesce(p2.description, p2.product) AS description, count(DISTINCT bd2) AS billingDocCount, maxCount WHERE billingDocCount = maxCount RETURN product, description, billingDocCount ORDER BY product",
   "intent": "aggregation",
-  "summary": "Counting billing documents per product"
+  "summary": "Products with the highest billing document count (all tied at top)"
+}
+
+Q: Which products appear in the most billing documents?
+A: {
+  "cypher": "MATCH (p:Product)<-[:REFERENCES_MATERIAL]-(bi:BillingItem)<-[:HAS_ITEM]-(bd:BillingDocument) WITH p.product AS product, coalesce(p.description, p.product) AS description, count(DISTINCT bd) AS billingDocCount ORDER BY billingDocCount DESC WITH max(billingDocCount) AS maxCount MATCH (p2:Product)<-[:REFERENCES_MATERIAL]-(bi2:BillingItem)<-[:HAS_ITEM]-(bd2:BillingDocument) WITH p2.product AS product, coalesce(p2.description, p2.product) AS description, count(DISTINCT bd2) AS billingDocCount, maxCount WHERE billingDocCount = maxCount RETURN product, description, billingDocCount ORDER BY product",
+  "intent": "aggregation",
+  "summary": "Products appearing in the most billing documents (all tied at top)"
 }
 
 Q: Trace the full flow of billing document 90504248
@@ -93,6 +100,8 @@ Rules:
 5. Limit results to 100 unless the user asks for more.
 6. Never use properties that are not listed in the schema.
 7. Return ONLY a JSON object with keys: "cypher", "intent", "summary". No markdown, no explanation.
+8. CONTEXT AWARENESS: If the conversation history contains a previous query result (e.g. a specific document ID, customer, product, or amount), and the user's new question refers back to it with pronouns like "it", "that", "those", "the same", or asks a follow-up without restating the subject — resolve the reference from history and incorporate the relevant IDs or filters directly into the new Cypher query.
+9. SUPERLATIVE QUERIES ("most", "highest", "largest", "top"): When the user asks for item(s) with the maximum value, use a reliable two-pass pattern — never LIMIT 1, never collect({...}) map literals, never parallel collect() lists. Two-pass pattern: (Pass 1) aggregate per item and compute WITH max(metric) AS maxCount. (Pass 2) re-run the same MATCH, re-aggregate, then filter WHERE metric = maxCount. This guarantees all tied records are returned with all their fields intact. Example: MATCH (...) WITH item, count(...) AS cnt ORDER BY cnt DESC WITH max(cnt) AS maxCount MATCH (...) WITH item, description, count(...) AS cnt, maxCount WHERE cnt = maxCount RETURN item, description, cnt
 
 Intent values: "aggregation" | "trace_flow" | "broken_flow" | "lookup" | "explore"
 """
@@ -117,7 +126,7 @@ def generate_cypher(user_message: str, conversation_history: list = None) -> dic
     # Build contents list — new SDK uses Content objects with role "user" / "model"
     contents = []
     if conversation_history:
-        for turn in conversation_history[-6:]:
+        for turn in conversation_history[-10:]:
             sdk_role = "model" if turn["role"] == "assistant" else "user"
             contents.append(
                 types.Content(role=sdk_role, parts=[types.Part(text=turn["content"])])

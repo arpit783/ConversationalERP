@@ -2,6 +2,23 @@ import React, { useState, useRef, useEffect } from 'react'
 import { streamChat, clearSession } from '../api'
 import { EXAMPLE_QUERIES } from '../constants'
 
+/**
+ * Strips markdown syntax from a string, returning clean plain text.
+ * Also normalises list prefixes so they render as clean lines.
+ */
+/**
+ * Renders narrative text as plain text.
+ * The backend already strips markdown before streaming, so this is a simple passthrough.
+ */
+function NarrativeText({ text }) {
+  if (!text) return null
+  return (
+    <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>
+      {text}
+    </div>
+  )
+}
+
 const SESSION_ID = `session-${Date.now()}`
 
 const s = {
@@ -54,7 +71,6 @@ const s = {
     background:'#f9fafb', color:'#111827',
     padding:'10px 14px', borderRadius:'12px 12px 12px 3px',
     fontSize:13, lineHeight:1.55, border:'1px solid #f3f4f6',
-    whiteSpace:'pre-wrap',
   },
 
   // Status chip
@@ -215,12 +231,14 @@ export default function ChatPanel({ onGraphData, onHighlight }) {
 
       } else if (event === 'done') {
         // Convert the last streaming bubble to plain text (narrative is complete)
+        let narrativeText = ''
         setMessages(prev => {
           const copy = [...prev]
           const idx = copy.map(m => m.role).lastIndexOf('assistant')
           if (idx !== -1 && copy[idx].type === 'streaming') {
+            narrativeText = copy[idx].content || ''
             // If narrative was empty (no text chunks), remove the empty bubble entirely
-            if (!copy[idx].content || copy[idx].content.trim() === '') {
+            if (!narrativeText || narrativeText.trim() === '') {
               copy.splice(idx, 1)
             } else {
               copy[idx] = { ...copy[idx], type:'text' }
@@ -228,9 +246,10 @@ export default function ChatPanel({ onGraphData, onHighlight }) {
           }
           return copy
         })
+        // Store real narrative text in history so follow-up questions have full context
         history.current.push(
           { role:'user', content: text },
-          { role:'assistant', content: gotResult ? '(result)' : '(no result)' }
+          { role:'assistant', content: narrativeText || '(graph result with no narrative)' }
         )
         setLoading(false)
       }
@@ -299,7 +318,7 @@ export default function ChatPanel({ onGraphData, onHighlight }) {
           if (m.role === 'user') return <div key={i} style={s.userBubble}>{m.content}</div>
           return (
             <div key={i} style={s.agentBubble}>
-              {m.content}
+              <NarrativeText text={m.content} />
               {m.type === 'streaming' && <span style={{ opacity:0.4 }}> ▋</span>}
             </div>
           )

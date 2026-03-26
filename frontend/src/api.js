@@ -1,4 +1,4 @@
-const BASE = ''  // proxied via vite
+const BASE = import.meta.env.VITE_API_URL || ''
 
 export async function fetchOverview() {
   const r = await fetch(`${BASE}/graph/overview`)
